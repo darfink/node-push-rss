@@ -36,7 +36,7 @@ Promise.mapSeries(config.users, user => {
       return axios.head(url).then(result => {
         // Some sources do not set last modified (allow zero timestamps)
         let lastModified = new Date(result.headers['last-modified']);
-        return lastModified.getTime() === 0 || lastModified > mostRecentFetch;
+        return (lastModified.getTime() || 0) === 0 || lastModified > mostRecentFetch;
       }).catch(error => {
         console.error('[RSS] Could not check last modified date:', url);
         console.error(error);
