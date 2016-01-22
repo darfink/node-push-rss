@@ -1,0 +1,14 @@
+{
+  "token": "<PUSHOVER_APP_TOKEN>",
+  "delay": 1000,
+  "users": [
+    {
+      "id": "<PUSHOVER_USER_OR_GROUP_ID>",
+      "feeds": [
+        "http://steamcommunity.com/games/295110/rss/",
+        "http://steamcommunity.com/games/252950/rss/",
+        "http://www.amxmodx.org/rss2.php?amount=10"
+      ]
+    }
+  ]
+}

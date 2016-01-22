@@ -1,0 +1,23 @@
+{
+  "name": "rss-notifier",
+  "version": "0.0.1",
+  "description": "Get push notifications from RSS feeds using Pushover",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Elliott Linder <elliott@linder.bz>",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.9.0",
+    "bluebird": "^3.1.1",
+    "ent": "^2.2.0",
+    "feed-read": "0.0.1",
+    "lodash": "^4.0.0",
+    "moment": "^2.11.1",
+    "nedb": "^1.7.1",
+    "pushover-notifications": "^0.2.2",
+    "striptags": "^2.1.1",
+    "truncate": "^2.0.0"
+  }
+}
