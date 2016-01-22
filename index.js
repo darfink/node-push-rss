@@ -24,7 +24,7 @@ Promise.mapSeries(config.users, user => {
   let pusher = Promise.promisifyAll(new Pushover({ user: user.id, token: config.token }));
   let mostRecentFetch = null;
 
-  db.findOneAsync({ user: user.id })
+  return db.findOneAsync({ user: user.id })
     .then(entry => {
       // Use the most recent date from the database, or one week old news if no time is stored
       mostRecentFetch = (entry === null ? moment().subtract({ week: 1 }).toDate() : entry.mostRecentFetch);
@@ -75,7 +75,9 @@ Promise.mapSeries(config.users, user => {
         return db.updateAsync({ user: user.id }, {
           mostRecentFetch: new Date(),
           user: user.id,
-        }, { upsert: true });
+        }, { upsert: true }).then(notifyCount);
       }
+      
+      return notifyCount;
     });
 });
