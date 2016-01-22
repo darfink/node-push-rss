@@ -1,5 +1,6 @@
 {
   "token": "<PUSHOVER_APP_TOKEN>",
+  "database": "./info.db",
   "delay": 1000,
   "users": [
     {

@@ -11,13 +11,14 @@ var decode = require('ent/decode');
 var _ = require('lodash');
 var br2nl = require('./br2nl');
 
-var db = Promise.promisifyAll(new Datastore({ filename: './info.db', autoload: true }));
 var config = require('./config.json');
 
-if(!config.token || !config.users) {
+if(!config.token || !config.users || !config.delay || !config.database) {
   console.error("Cannot read config file");
   process.exit(1);
 }
+
+var db = Promise.promisifyAll(new Datastore({ filename: config.database, autoload: true }));
 
 Promise.mapSeries(config.users, user => {
   // Create a Pushover connection for each user in the configuration
