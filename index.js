@@ -53,10 +53,11 @@ Promise.mapSeries(config.users, user => {
           // Create a short and concise excerpt of the article (and decode HTML entities)
           article.content = truncate(decode(striptags(br2nl(article.content)).trim()), 300);
 
-          // Send the notification with the article's UNIX date
+          // Pushover does not allow too many simultaneous connections, so use a delay
           return Promise.delay(config.delay).then(() => {
             console.log('[RSS] New article:', article.title);
 
+            // Send the notification with the article's UNIX date
             pusher.sendAsync({
               timestamp: article.published.getTime() / 1000,
               message: article.content,
