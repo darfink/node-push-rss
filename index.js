@@ -1,85 +1,73 @@
 'use strict';
 var Datastore = require('nedb');
-var Pushover = require('pushover-notifications');
 var Promise = require('bluebird');
 var striptags = require('striptags');
 var truncate = require('truncate');
-var moment = require('moment');
 var axios = require('axios');
 var feed = Promise.promisify(require('feed-read'));
 var decode = require('ent/decode');
-var _ = require('lodash');
 var br2nl = require('./br2nl');
 
-var config = require('./config.json');
+Promise.coroutine.addYieldHandler(function(value) {
+  if(Array.isArray(value)) {
+    return Promise.all(value);
+  }
+});
 
-if(!config.token || !config.users || !config.delay || !config.database) {
+const config = require('./config.json');
+
+if(!config.users || !config.database) {
   console.error("Cannot read config file");
   process.exit(1);
 }
 
-var db = Promise.promisifyAll(new Datastore({ filename: config.database, autoload: true }));
+var db = Promise.promisifyAll(new Datastore({
+  filename: config.database,
+  autoload: true,
+}));
 
-Promise.mapSeries(config.users, user => {
-  // Create a Pushover connection for each user in the configuration
-  let pusher = Promise.promisifyAll(new Pushover({ user: user.id, token: config.token }));
-  let mostRecentFetch = null;
+Promise.mapSeries(config.users, Promise.coroutine(function* (user) {
+  // Use the most recent date from the database, or use the current date
+  let entry = yield db.findOneAsync({ user: user.id });
 
-  return db.findOneAsync({ user: user.id })
-    .then(entry => {
-      // Use the most recent date from the database, or one week old news if no time is stored
-      mostRecentFetch = (entry === null ? moment().subtract({ week: 1 }).toDate() : entry.mostRecentFetch);
-      return user.feeds;
-    })
-    // Filter out feeds that have not been modified (using http HEAD)
-    .filter(url => {
-      return axios.head(url).then(result => {
-        // Some sources do not set last modified (allow zero timestamps)
-        let lastModified = new Date(result.headers['last-modified']);
-        return (lastModified.getTime() || 0) === 0 || lastModified > mostRecentFetch;
-      }).catch(error => {
-        console.error('[RSS] Could not check last modified date:', url);
-        console.error(error);
-        return false;
-      });
-    })
-    // Retrieve and parse the RSS feed
-    .map(url => feed(url))
-    // Iterate over each RSS feed and notify of new articles
-    .mapSeries(articles => {
-      return Promise
-        // Only articles that have been recently published are interesting
-        .filter(articles, article => article.published > mostRecentFetch)
-        .mapSeries(article => {
-          // Create a short and concise excerpt of the article (and decode HTML entities)
-          article.content = truncate(decode(striptags(br2nl(article.content)).trim()), 300);
+  const initialTime = new Date();
+  let mostRecentFetch = (entry === null ? initialTime : entry.mostRecentFetch);
 
-          // Pushover does not allow too many simultaneous connections, so use a delay
-          return Promise.delay(config.delay).then(() => {
-            console.log('[RSS] New article:', article.title);
-
-            // Send the notification with the article's UNIX date
-            pusher.sendAsync({
-              timestamp: article.published.getTime() / 1000,
-              message: article.content,
-              title: article.title,
-              url: article.link,
-              url_title: 'View Article',
-            });
-          });
-        });
-    })
-    .then(notifications => {
-      let notifyCount = _.sumBy(notifications, 'length');
-      console.log('[RSS] Notified about %d new article(s) for user "%s"', notifyCount, user.id);
-
-      if(notifyCount > 0) {
-        return db.updateAsync({ user: user.id }, {
-          mostRecentFetch: new Date(),
-          user: user.id,
-        }, { upsert: true }).then(notifyCount);
-      }
-      
-      return notifyCount;
+  let feeds = yield Promise.filter(user.feeds, url => {
+    return axios.head(url).then(result => {
+      // Some sources do not set last modified (allow zero timestamps)
+      let lastModified = new Date(result.headers['last-modified']);
+      return (lastModified.getTime() || 0) === 0 || lastModified > mostRecentFetch;
     });
-});
+  });
+
+  let Adapter = require(`./adapters/${user.type}`);
+  let notifier = new Adapter(user.options);
+
+  let notifyCount = 0;
+
+  // Retrieve and parse the RSS feed (containing the articles)
+  for(var articles of (yield feeds.map(url => feed(url)))) {
+    // Only articles that have been recently published are interesting
+    for(let article of articles.filter(article => article.published > mostRecentFetch)) {
+      // Create a short and concise excerpt of the article (and decode HTML entities)
+      article.content = truncate(decode(striptags(br2nl(article.content)).trim()), 300);
+
+      // Use a little delay between each push notification
+      yield Promise.delay(config.delay || 1000);
+
+      // Send the notification to the user
+      yield notifier.notify(article);
+      notifyCount++;
+    }
+  }
+
+  console.log('[RSS] Notified about %d new article(s) for user "%s"', notifyCount, user.name || "unknown");
+
+  if(notifyCount > 0) {
+    // Update the timestamp in the database to keep track of the date when the articles were retrieved
+    yield db.updateAsync({ user: user.id }, { mostRecentFetch: initialTime, user: user.id, }, { upsert: true });
+  }
+
+  return notifyCount;
+}));
