@@ -26,13 +26,17 @@ var db = Promise.promisifyAll(new Datastore({
   autoload: true,
 }));
 
-Promise.mapSeries(config.users, Promise.coroutine(function* (user) {
+// Iterate over each user sequentially
+Promise.mapSeries(config.users, Promise.coroutine(handleUser));
+
+function* handleUser(user) {
   // Use the most recent date from the database, or use the current date
   let entry = yield db.findOneAsync({ user: user.id });
 
   const initialTime = new Date();
   let mostRecentFetch = (entry === null ? initialTime : entry.mostRecentFetch);
 
+  mostRecentFetch = new Date("2015");
   let feeds = yield Promise.filter(user.feeds, url => {
     return axios.head(url).then(result => {
       // Some sources do not set last modified (allow zero timestamps)
@@ -70,4 +74,4 @@ Promise.mapSeries(config.users, Promise.coroutine(function* (user) {
   }
 
   return notifyCount;
-}));
+}
