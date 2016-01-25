@@ -36,7 +36,6 @@ function* handleUser(user) {
   const initialTime = new Date();
   let mostRecentFetch = (entry === null ? initialTime : entry.mostRecentFetch);
 
-  mostRecentFetch = new Date("2015");
   let feeds = yield Promise.filter(user.feeds, url => {
     return axios.head(url).then(result => {
       // Some sources do not set last modified (allow zero timestamps)
